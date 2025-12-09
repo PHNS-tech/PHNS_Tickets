@@ -1,0 +1,17 @@
+name = "punnohoang/phns_tickets"
+version = "0.1.0"
+compiler = "v1.1.19"
+plutus = "v3"
+description = "PHNS Tickets Aiken contracts"
+
+[repository]
+user = "punnohoang"
+project = "phns_tickets"
+platform = "github"
+
+[[dependencies]]
+name = "aiken-lang/stdlib"
+version = "v3.0.0"
+source = "github"
+
+[config]

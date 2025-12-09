@@ -1,0 +1,17 @@
+node_modules/
+.next/
+dist/
+build/
+*.log
+.DS_Store
+.env
+.env.local
+.env.*.local
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.cache/
+.env.*.example
+plutus.json
