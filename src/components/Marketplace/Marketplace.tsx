@@ -21,6 +21,18 @@ async function fetchUtxos(address: string) {
     return json.success ? json.data : [];
 }
 
+function hexToString(hex: string) {
+    try {
+        if (!hex) return '';
+        // remove 0x if present
+        if (hex.startsWith('0x')) hex = hex.slice(2);
+        const bytes = hex.match(/.{1,2}/g) || [];
+        return bytes.map(b => String.fromCharCode(parseInt(b, 16))).join('');
+    } catch (e) {
+        return '';
+    }
+}
+
 export default function Marketplace() {
     const { wallet, connected } = useWallet();
     const [scriptAddress, setScriptAddress] = useState('');
@@ -42,7 +54,41 @@ export default function Marketplace() {
         console.log('[Marketplace] Loading UTXOs from script address:', scriptAddress);
         const data = await fetchUtxos(scriptAddress);
         console.log('[Marketplace] Got UTXOs:', data);
-        setUtxos(data || []);
+        // Normalize UTXOs: filter token assets, decode datum bytes (hex -> JSON)
+        const processed = (data || []).map((u: any) => {
+            // assets: all non-lovelace tokens in the amount array
+            const rawAmounts = u.amount || u.assets || [];
+            const assets = Array.isArray(rawAmounts) ? rawAmounts.filter((a: any) => a.unit !== 'lovelace') : [];
+
+            // decode datum if present (Blockfrost provides fields[0].bytes which is hex of JSON string)
+            let datumParsed: any = null;
+            try {
+                if (u.datum && typeof u.datum === 'object') {
+                    // previously we sometimes got { cbor: hex } or { fields: [{ bytes: '...'}] }
+                    if (u.datum.cbor) {
+                        const s = hexToString(u.datum.cbor);
+                        datumParsed = JSON.parse(s);
+                    } else if (u.datum.fields && u.datum.fields[0] && u.datum.fields[0].bytes) {
+                        const hex = u.datum.fields[0].bytes;
+                        const s = hexToString(hex);
+                        try { datumParsed = JSON.parse(s); } catch (e) { datumParsed = s; }
+                    } else {
+                        datumParsed = u.datum;
+                    }
+                }
+            } catch (err) {
+                console.warn('[Marketplace] Failed to parse datum for utxo', u.input?.txHash, err);
+                datumParsed = null;
+            }
+
+            return {
+                ...u,
+                assets,
+                datumParsed,
+            };
+        });
+
+        setUtxos(processed || []);
     };
 
     useEffect(() => { load(); }, [scriptAddress]);
@@ -253,19 +299,40 @@ export default function Marketplace() {
                     const isSelected = selectedUtxo?.input.txHash === u.input.txHash;
                     let price = '';
                     try {
-                        if (u.datum && typeof u.datum === 'object') {
-                            price = u.datum.price || u.datum.cbor;
+                        if (u.datumParsed) {
+                            // prefer numeric price in datum
+                            price = u.datumParsed.price ?? u.datumParsed.cbor ?? '';
+                            // if datumParsed is a string try JSON parse
+                            if (!price && typeof u.datumParsed === 'string') {
+                                try { const d = JSON.parse(u.datumParsed); price = d.price ?? ''; } catch (e) { }
+                            }
                         }
                     } catch (e) { }
                     const asset = u.assets?.[0];
+                    // derive readable token name from asset.unit (policyid + hex(tokenName))
+                    let tokenName = '';
+                    if (asset && asset.unit && asset.unit !== 'lovelace') {
+                        const unit = asset.unit;
+                        // policy id is 56 hex chars
+                        const policyLen = 56;
+                        const tokenHex = unit.length > policyLen ? unit.slice(policyLen) : '';
+                        tokenName = tokenHex ? hexToString(tokenHex) : unit;
+                    }
 
                     return (
                         <div key={i} style={{ border: isSelected ? '2px solid #007bff' : '1px solid #e6e6e6', borderRadius: 10, overflow: 'hidden', background: '#fff', boxShadow: '0 2px 6px rgba(0,0,0,0.03)' }}>
                             <div style={{ height: 140, background: '#fafafa', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                                 {/* If datum contains image cid you can render it here. For now show placeholder */}
                                 <div style={{ textAlign: 'center', color: '#999' }}>
-                                    <div style={{ fontSize: 12 }}>Ticket</div>
-                                    <div style={{ fontSize: 14, fontWeight: 700, marginTop: 6 }}>{asset ? asset.unit.substring(0, 12) + '...' : '—'}</div>
+                                    {/** show image if available in datumParsed (image or imageHash) */}
+                                    {u.datumParsed && (u.datumParsed.image || u.datumParsed.imageHash) ? (
+                                        <img src={u.datumParsed.image ? u.datumParsed.image : `https://gateway.pinata.cloud/ipfs/${u.datumParsed.imageHash}`} alt={tokenName || 'ticket'} style={{ maxHeight: 120, maxWidth: '100%', objectFit: 'cover' }} />
+                                    ) : (
+                                        <div>
+                                            <div style={{ fontSize: 12 }}>Ticket</div>
+                                            <div style={{ fontSize: 14, fontWeight: 700, marginTop: 6 }}>{tokenName ? tokenName : (asset ? asset.unit.substring(0, 12) + '...' : '—')}</div>
+                                        </div>
+                                    )}
                                 </div>
                             </div>
 
@@ -277,6 +344,7 @@ export default function Marketplace() {
 
                                 <div style={{ marginTop: 8, fontSize: 13, color: '#444' }}>
                                     <div style={{ marginBottom: 6 }}><strong>TX:</strong> {u.input.txHash.substring(0, 16)}...</div>
+                                    <div style={{ marginBottom: 6 }}><strong>Token:</strong> {tokenName || (asset ? asset.unit : '—')}</div>
                                     <div style={{ marginBottom: 6 }}><strong>Price:</strong> {price ? `${price} lovelace` : '—'}</div>
                                 </div>
 
