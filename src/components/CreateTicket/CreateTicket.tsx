@@ -141,8 +141,6 @@ export default function CreateTicket() {
       const Script = applyParamsToScript(blueprint.validators[0].compiledCode, []);
       const { address: scriptAddress } = serializePlutusScript({ code: Script, version: 'V3' });
 
-      console.log('[CreateTicket] Script address:', scriptAddress);
-
       const datumObj = { event_id: 'evt1', seller: changeAddress, price: Number(lockPrice), ticket_number: 't1', event_date: 0, status: 0 };
       const datumStr = JSON.stringify(datumObj);
 

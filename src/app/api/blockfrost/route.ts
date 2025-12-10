@@ -22,7 +22,6 @@ export async function POST(request: NextRequest) {
         // 1. Lấy địa chỉ từ request
         const { address } = await request.json();
 
-        console.log('[blockfrost API] Received request for address:', address);
 
         // 2. Kiểm tra địa chỉ
         if (!address) {
@@ -36,17 +35,10 @@ export async function POST(request: NextRequest) {
             Project_id: process.env.NEXT_PUBLIC_BLOCKFROST_API_KEY || ''
         };
 
-        if (!blockfrostURL || !headers.Project_id) {
-            console.error('[blockfrost API] Missing Blockfrost config');
-            return NextResponse.json({ error: 'Blockfrost not configured' }, { status: 500 });
-        }
 
         // 4. Lấy UTXOs từ Blockfrost
-        console.log('[blockfrost API] Fetching UTXOs from:', blockfrostURL);
         const response = await axios.get(`${blockfrostURL}/addresses/${address}/utxos`, { headers });
         const utxos = response.data;
-
-        console.log('[blockfrost API] Got', utxos.length, 'total UTXOs');
 
 
         // 5. Xử lý từng UTXO
@@ -90,7 +82,7 @@ export async function POST(request: NextRequest) {
                     address: utxo.address,
                     amount: utxo.amount
                 },
-                assets: utxo.amount.filter((a: any) => a.unit !== 'lovelace'),
+                assets: utxo.amount,
                 datum: datumValue
             });
         }
