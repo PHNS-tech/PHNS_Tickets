@@ -233,42 +233,70 @@ export default function Marketplace() {
     };
 
     return (
-        <div style={{ padding: 20 }}>
-            <h2>Marketplace</h2>
-            <p style={{ fontSize: 12, color: '#666' }}>Script address: {scriptAddress}</p>
-            <button onClick={load} style={{ marginBottom: 12, padding: '8px 16px', background: '#007bff', color: 'white', border: 'none', borderRadius: 4, cursor: 'pointer' }}>Reload Listings</button>
+        <div style={{ padding: 20, maxWidth: 1100, margin: '0 auto' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                <div>
+                    <h2 style={{ margin: 0 }}>Marketplace</h2>
+                    <p style={{ fontSize: 12, color: '#666', margin: '6px 0 0' }}>Script address: {scriptAddress}</p>
+                </div>
+                <div>
+                    <button onClick={load} style={{ padding: '8px 16px', background: '#007bff', color: 'white', border: 'none', borderRadius: 6, cursor: 'pointer' }}>Reload Listings</button>
+                </div>
+            </div>
 
             {utxos.length === 0 && <p>No listings available.</p>}
 
-            <div style={{ display: 'grid', gap: 12 }}>
-                {utxos.map((u, i) => (
-                    <div key={i} style={{ border: selectedUtxo?.input.txHash === u.input.txHash ? '2px solid #007bff' : '1px solid #ddd', padding: 12, borderRadius: 6, background: selectedUtxo?.input.txHash === u.input.txHash ? '#f0f8ff' : '#fff' }}>
-                        <div><strong>Listing #{i + 1}</strong></div>
-                        <div style={{ fontSize: 12, marginTop: 6 }}><strong>TX:</strong> {u.txHash.substring(0, 16)}...</div>
-                        <div style={{ fontSize: 12 }}><strong>Assets:</strong> {u.assets.map((a: any) => `${a.unit.substring(0, 20)}...: ${a.quantity}`).join(', ')}</div>
-                        {u.datum && <div style={{ fontSize: 12 }}><strong>Price:</strong> {JSON.parse(u.datum).price} lovelace</div>}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 16 }}>
+                {utxos.map((u, i) => {
+                    const isSelected = selectedUtxo?.input.txHash === u.input.txHash;
+                    let price = '';
+                    try { if (u.datum) price = JSON.parse(u.datum).price; } catch (e) { }
+                    const asset = u.assets?.[0];
 
-                        <div style={{ marginTop: 10, display: 'flex', gap: 8 }}>
-                            <button onClick={() => { setSelectedUtxo(u); setSelectedAction('unlock'); }} style={{ flex: 1, padding: 8, background: selectedAction === 'unlock' && selectedUtxo?.input.txHash === u.input.txHash ? '#28a745' : '#ccc', color: 'white', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: 12 }}>Buy (Unlock)</button>
-                            <button onClick={() => { setSelectedUtxo(u); setSelectedAction('relock'); }} style={{ flex: 1, padding: 8, background: selectedAction === 'relock' && selectedUtxo?.input.txHash === u.input.txHash ? '#17a2b8' : '#ccc', color: 'white', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: 12 }}>Re-lock</button>
-                            <button onClick={() => { setSelectedUtxo(u); setSelectedAction('burn'); }} style={{ flex: 1, padding: 8, background: selectedAction === 'burn' && selectedUtxo?.input.txHash === u.input.txHash ? '#dc3545' : '#ccc', color: 'white', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: 12 }}>Burn</button>
+                    return (
+                        <div key={i} style={{ border: isSelected ? '2px solid #007bff' : '1px solid #e6e6e6', borderRadius: 10, overflow: 'hidden', background: '#fff', boxShadow: '0 2px 6px rgba(0,0,0,0.03)' }}>
+                            <div style={{ height: 140, background: '#fafafa', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                {/* If datum contains image cid you can render it here. For now show placeholder */}
+                                <div style={{ textAlign: 'center', color: '#999' }}>
+                                    <div style={{ fontSize: 12 }}>Ticket</div>
+                                    <div style={{ fontSize: 14, fontWeight: 700, marginTop: 6 }}>{asset ? asset.unit.substring(0, 12) + '...' : '—'}</div>
+                                </div>
+                            </div>
+
+                            <div style={{ padding: 12 }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                    <div style={{ fontWeight: 700 }}>Listing #{i + 1}</div>
+                                    <div style={{ fontSize: 12, color: '#666' }}>{asset ? `${asset.quantity}` : ''}</div>
+                                </div>
+
+                                <div style={{ marginTop: 8, fontSize: 13, color: '#444' }}>
+                                    <div style={{ marginBottom: 6 }}><strong>TX:</strong> {u.txHash.substring(0, 16)}...</div>
+                                    <div style={{ marginBottom: 6 }}><strong>Price:</strong> {price ? `${price} lovelace` : '—'}</div>
+                                </div>
+
+                                <div style={{ marginTop: 12, display: 'flex', gap: 8 }}>
+                                    <button onClick={() => { setSelectedUtxo(u); setSelectedAction('unlock'); }} style={{ flex: 1, padding: 10, background: selectedAction === 'unlock' && isSelected ? '#28a745' : '#f0f0f0', color: selectedAction === 'unlock' && isSelected ? 'white' : '#333', border: 'none', borderRadius: 8, cursor: 'pointer', fontSize: 13 }}>Buy</button>
+                                    <button onClick={() => { setSelectedUtxo(u); setSelectedAction('relock'); }} style={{ flex: 1, padding: 10, background: selectedAction === 'relock' && isSelected ? '#17a2b8' : '#f0f0f0', color: selectedAction === 'relock' && isSelected ? 'white' : '#333', border: 'none', borderRadius: 8, cursor: 'pointer', fontSize: 13 }}>Re-lock</button>
+                                    <button onClick={() => { setSelectedUtxo(u); setSelectedAction('burn'); }} style={{ flex: 1, padding: 10, background: selectedAction === 'burn' && isSelected ? '#dc3545' : '#f0f0f0', color: selectedAction === 'burn' && isSelected ? 'white' : '#333', border: 'none', borderRadius: 8, cursor: 'pointer', fontSize: 13 }}>Burn</button>
+                                </div>
+                            </div>
                         </div>
-                    </div>
-                ))}
+                    );
+                })}
             </div>
 
             {selectedUtxo && selectedAction && (
-                <div style={{ marginTop: 20, padding: 16, border: '1px solid #007bff', borderRadius: 6, background: '#f0f8ff' }}>
-                    <h4>Confirm {selectedAction.charAt(0).toUpperCase() + selectedAction.slice(1)}</h4>
+                <div style={{ marginTop: 20, padding: 16, border: '1px solid #007bff', borderRadius: 8, background: '#f0f8ff' }}>
+                    <h4 style={{ marginTop: 0 }}>Confirm {selectedAction.charAt(0).toUpperCase() + selectedAction.slice(1)}</h4>
                     <p style={{ fontSize: 12 }}>Selected: {selectedUtxo.input.txHash.substring(0, 20)}...</p>
-                    <div style={{ display: 'flex', gap: 8 }}>
-                        <button onClick={selectedAction === 'unlock' ? handleUnlock : selectedAction === 'relock' ? handleReLock : handleBurn} disabled={loading} style={{ flex: 1, padding: 10, background: loading ? '#ccc' : '#007bff', color: 'white', border: 'none', borderRadius: 4, cursor: loading ? 'not-allowed' : 'pointer' }}>{loading ? 'Processing...' : 'Confirm'}</button>
-                        <button onClick={() => { setSelectedUtxo(null); setSelectedAction(null); }} style={{ flex: 1, padding: 10, background: '#ccc', color: '#333', border: 'none', borderRadius: 4, cursor: 'pointer' }}>Cancel</button>
+                    <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+                        <button onClick={selectedAction === 'unlock' ? handleUnlock : selectedAction === 'relock' ? handleReLock : handleBurn} disabled={loading} style={{ flex: 1, padding: 12, background: loading ? '#ccc' : '#007bff', color: 'white', border: 'none', borderRadius: 8, cursor: loading ? 'not-allowed' : 'pointer' }}>{loading ? 'Processing...' : 'Confirm'}</button>
+                        <button onClick={() => { setSelectedUtxo(null); setSelectedAction(null); }} style={{ flex: 1, padding: 12, background: '#ddd', color: '#333', border: 'none', borderRadius: 8, cursor: 'pointer' }}>Cancel</button>
                     </div>
                 </div>
             )}
 
-            {result && <div style={{ marginTop: 12, padding: 10, background: '#e7f3ff', borderRadius: 4, fontSize: 12 }}>{result}</div>}
+            {result && <div style={{ marginTop: 12, padding: 10, background: '#e7f3ff', borderRadius: 6, fontSize: 13 }}>{result}</div>}
         </div>
     );
 }

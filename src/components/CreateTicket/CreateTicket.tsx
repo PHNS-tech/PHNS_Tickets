@@ -141,99 +141,65 @@ export default function CreateTicket() {
   };
 
   return (
-    <div style={{
-      display: "flex",
-      flexDirection: "column",
-      gap: "20px",
-      padding: "24px",
-      border: "1px solid #ddd",
-      borderRadius: "8px",
-      width: "100%",
-      maxWidth: "400px"
-    }}>
+    <div style={{ maxWidth: 1000, margin: '24px auto', padding: '18px' }}>
+      <div style={{ display: 'flex', gap: 20, flexDirection: 'column' }}>
+        <div style={{ fontSize: 20, fontWeight: 700 }}>Create Ticket</div>
 
-      <div>
-        <h3>Upload Image</h3>
-        <input
-          type="file"
-          accept="image/*"
-          onChange={(e) => setFile(e.target.files?.[0])}
-          style={{ width: "100%", padding: "8px", marginBottom: "8px" }}
-        />
-        <button
-          disabled={uploading || !file}
-          onClick={uploadFile}
-          style={{
-            padding: "8px 16px",
-            backgroundColor: uploading || !file ? "#ccc" : "#007bff",
-            color: "white",
-            border: "none",
-            borderRadius: "4px",
-            width: "100%",
-            cursor: uploading || !file ? "not-allowed" : "pointer"
-          }}
-        >
-          {uploading ? "Uploading..." : "Upload"}
-        </button>
-        {ipfsHash && <p style={{ color: "green", fontSize: "12px" }}>Uploaded: {ipfsHash}</p>}
-      </div>
+        <div style={{ display: 'flex', gap: 20, flexDirection: 'row', flexWrap: 'wrap' }}>
+          {/* Left: image + upload */}
+          <div style={{ minWidth: 320, maxWidth: 360, flex: '0 0 360px', border: '1px solid #ececec', borderRadius: 12, padding: 12, background: '#fff' }}>
+            <div style={{ height: 220, borderRadius: 8, overflow: 'hidden', background: '#fafafa', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 12 }}>
+              {ipfsHash ? (
+                // show image preview from Pinata gateway
+                // if your uploads use another gateway change URL accordingly
+                <img src={`https://gateway.pinata.cloud/ipfs/${ipfsHash}`} alt="preview" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              ) : (
+                <div style={{ color: '#888' }}>No image uploaded</div>
+              )}
+            </div>
 
-      <div>
-        <h3>Asset Details</h3>
-        <input
-          type="text"
-          placeholder="Asset Name"
-          value={assetName}
-          onChange={(e) => setAssetName(e.target.value)}
-          style={{ width: "100%", padding: "8px", marginBottom: "8px", boxSizing: "border-box" }}
-        />
-        <textarea
-          placeholder="Description"
-          value={assetDescription}
-          onChange={(e) => setAssetDescription(e.target.value)}
-          rows={2}
-          style={{ width: "100%", padding: "8px", marginBottom: "8px", boxSizing: "border-box" }}
-        />
-        <input
-          type="number"
-          placeholder="Quantity"
-          value={assetQuantity}
-          onChange={(e) => setAssetQuantity(Math.max(1, parseInt(e.target.value) || 1))}
-          min="1"
-          style={{ width: "100%", padding: "8px", boxSizing: "border-box" }}
-        />
-      </div>
-
-      <div>
-        <button
-          disabled={minting || !connected || !ipfsHash || !assetName.trim()}
-          onClick={mintAssets}
-          style={{
-            padding: "12px",
-            backgroundColor: (minting || !connected || !ipfsHash || !assetName.trim()) ? "#ccc" : "#28a745",
-            color: "white",
-            border: "none",
-            borderRadius: "4px",
-            width: "100%",
-            fontSize: "16px",
-            cursor: (minting || !connected || !ipfsHash || !assetName.trim()) ? "not-allowed" : "pointer"
-          }}
-        >
-          {minting ? "Minting..." : `Mint ${assetQuantity} Asset${assetQuantity > 1 ? 's' : ''}`}
-        </button>
-
-        {!connected && <p style={{ color: "red", fontSize: "12px", textAlign: "center" }}>Connect wallet first</p>}
-        {txHash && <p style={{ color: "green", fontSize: "12px", wordBreak: "break-all" }}>Success! TX: {txHash}</p>}
-
-        {mintedUnit && (
-          <div style={{ marginTop: 12, padding: 12, border: '1px dashed #007bff', borderRadius: 6, background: '#f0f8ff' }}>
-            <h4>Lock Ticket to Marketplace</h4>
-            <div style={{ fontSize: 12, marginBottom: 8 }}>Minted unit: {mintedUnit}</div>
-            <label style={{ display: 'block', marginBottom: 6, fontSize: 14 }}>Price (lovelace)</label>
-            <input value={lockPrice} onChange={(e) => setLockPrice(e.target.value)} style={{ width: '100%', padding: 8, marginBottom: 12, boxSizing: 'border-box' }} />
-            <button onClick={handleLockToMarketplace} style={{ width: '100%', padding: 10, background: '#007bff', color: 'white', border: 'none', borderRadius: 4, cursor: 'pointer' }}>Lock to Marketplace</button>
+            <label style={{ display: 'block', fontWeight: 600, marginBottom: 8 }}>Upload Poster</label>
+            <input type="file" accept="image/*" onChange={(e) => setFile(e.target.files?.[0])} style={{ width: '100%', marginBottom: 8 }} />
+            <button disabled={uploading || !file} onClick={uploadFile} style={{ width: '100%', padding: 10, background: uploading || !file ? '#ddd' : '#1976d2', color: 'white', border: 'none', borderRadius: 8, cursor: uploading || !file ? 'not-allowed' : 'pointer' }}>{uploading ? 'Uploading...' : 'Upload Poster'}</button>
+            {ipfsHash && <div style={{ marginTop: 10, fontSize: 12, color: '#0a8f3e' }}>Uploaded: {ipfsHash}</div>}
           </div>
-        )}
+
+          {/* Right: details + actions */}
+          <div style={{ flex: 1, minWidth: 280, border: '1px solid #ececec', borderRadius: 12, padding: 16, background: '#fff' }}>
+            <div style={{ marginBottom: 12 }}>
+              <label style={{ display: 'block', fontWeight: 600, marginBottom: 6 }}>Event / Ticket Name</label>
+              <input type="text" placeholder="Asset Name" value={assetName} onChange={(e) => setAssetName(e.target.value)} style={{ width: '100%', padding: 10, borderRadius: 8, border: '1px solid #ddd', boxSizing: 'border-box' }} />
+            </div>
+
+            <div style={{ marginBottom: 12 }}>
+              <label style={{ display: 'block', fontWeight: 600, marginBottom: 6 }}>Description</label>
+              <textarea placeholder="Description" value={assetDescription} onChange={(e) => setAssetDescription(e.target.value)} rows={3} style={{ width: '100%', padding: 10, borderRadius: 8, border: '1px solid #ddd', boxSizing: 'border-box' }} />
+            </div>
+
+            <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 12 }}>
+              <div style={{ flex: '1 1 120px' }}>
+                <label style={{ display: 'block', fontWeight: 600, marginBottom: 6 }}>Quantity</label>
+                <input type="number" value={assetQuantity} onChange={(e) => setAssetQuantity(Math.max(1, parseInt(e.target.value) || 1))} min={1} style={{ width: '100%', padding: 10, borderRadius: 8, border: '1px solid #ddd', boxSizing: 'border-box' }} />
+              </div>
+
+              <div style={{ flex: '1 1 160px' }}>
+                <label style={{ display: 'block', fontWeight: 600, marginBottom: 6 }}>Price (lovelace)</label>
+                <input value={lockPrice} onChange={(e) => setLockPrice(e.target.value)} style={{ width: '100%', padding: 10, borderRadius: 8, border: '1px solid #ddd', boxSizing: 'border-box' }} />
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: 12 }}>
+              <button disabled={minting || !connected || !ipfsHash || !assetName.trim()} onClick={mintAssets} style={{ flex: 1, padding: 12, background: (minting || !connected || !ipfsHash || !assetName.trim()) ? '#ddd' : '#28a745', color: 'white', border: 'none', borderRadius: 8, cursor: (minting || !connected || !ipfsHash || !assetName.trim()) ? 'not-allowed' : 'pointer' }}>{minting ? 'Minting...' : `Mint ${assetQuantity}`}</button>
+              <button disabled={!mintedUnit} onClick={handleLockToMarketplace} style={{ padding: 12, background: mintedUnit ? '#1976d2' : '#ddd', color: 'white', border: 'none', borderRadius: 8, cursor: mintedUnit ? 'pointer' : 'not-allowed' }}>Lock to Marketplace</button>
+            </div>
+
+            <div style={{ marginTop: 12 }}>
+              {!connected && <p style={{ color: 'crimson' }}>Connect wallet to mint and lock tickets.</p>}
+              {txHash && <p style={{ color: '#0a8f3e', wordBreak: 'break-all' }}>Mint TX: {txHash}</p>}
+              {mintedUnit && <div style={{ marginTop: 8, fontSize: 13, color: '#333' }}>Minted unit: <code style={{ background: '#f7f7f7', padding: '2px 6px', borderRadius: 4 }}>{mintedUnit}</code></div>}
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );
