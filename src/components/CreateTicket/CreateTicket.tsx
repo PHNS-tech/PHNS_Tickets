@@ -1,169 +1,190 @@
-'use client';
+"use client";
 
-import { useAddress, useWallet } from '@meshsdk/react';
-import { useState, useEffect } from 'react';
+import { useState } from "react";
+import { useWallet } from "@meshsdk/react";
 import {
-    applyParamsToScript,
-    mConStr0,
     MeshTxBuilder,
-    serializePlutusScript,
+    ForgeScript,
+    resolveScriptHash,
     stringToHex,
-} from '@meshsdk/core';
-import blueprint from '../../../plutus.json';
+} from "@meshsdk/core";
 
 export default function CreateTicket() {
-    const address = useAddress();
-    const { wallet, connected } = useWallet();
-    const [message, setMessage] = useState('');
-    const [scriptAddress, setScriptAddress] = useState('');
     const [file, setFile] = useState<File>();
     const [uploading, setUploading] = useState(false);
-    const [ipfsHash, setIpfsHash] = useState('');
+    const [minting, setMinting] = useState(false);
+    const [ipfsHash, setIpfsHash] = useState("");
+    const [txHash, setTxHash] = useState("");
+    const [assetName, setAssetName] = useState("");
+    const [assetDescription, setAssetDescription] = useState("");
+    const [assetQuantity, setAssetQuantity] = useState(1);
 
-    // prepare script
-    const Script = applyParamsToScript(blueprint.validators[0].compiledCode, []);
-
-    useEffect(() => {
-        try {
-            const script = { code: Script, version: 'V3' } as any;
-            const { address: addr } = serializePlutusScript(script);
-            setScriptAddress(addr);
-        } catch (err) {
-            console.error('Failed to prepare script address', err);
-        }
-    }, [Script]);
+    const { wallet, connected } = useWallet();
 
     const uploadFile = async () => {
-        if (!file) return alert('No file selected');
+        if (!file) return alert("No file selected");
         try {
             setUploading(true);
             // Get signed upload URL from backend
-            const urlRes = await fetch('/api/url').then((res) => res.json());
+            const urlRes = await fetch("/api/url").then((res) => res.json());
 
             // Upload file to Pinata via backend API route (avoids CORS)
             const formData = new FormData();
-            formData.append('file', file);
-            formData.append('url', urlRes.url);
+            formData.append("file", file);
+            formData.append("url", urlRes.url);
 
-            const uploadRes = await fetch('/api/upload', {
-                method: 'POST',
+            const uploadRes = await fetch("/api/upload", {
+                method: "POST",
                 body: formData,
             }).then((res) => res.json());
 
             if (uploadRes.cid) {
                 setIpfsHash(uploadRes.cid);
                 setUploading(false);
-                alert('Image uploaded! Ready to create ticket.');
+                alert("File uploaded!");
             } else {
-                throw new Error(uploadRes.error || 'Unknown error');
+                throw new Error(uploadRes.error || "Unknown error");
             }
         } catch (e) {
             console.log(e);
             setUploading(false);
-            alert('Upload failed');
+            alert("Upload failed");
         }
     };
 
-    const handleCreate = async (e: any) => {
-        e.preventDefault();
-        if (!connected || !wallet) return setMessage('Please connect your wallet');
-
-        const form = new FormData(e.target);
-        const eventId = String(form.get('eventId') || '');
-        const ticketNumber = String(form.get('ticketNumber') || '');
-        const priceAda = Number(form.get('price') || 0);
-        if (!eventId || !ticketNumber || !priceAda) return setMessage('Please fill all fields');
-        if (!ipfsHash) return setMessage('Please upload an image first');
+    const mintAssets = async () => {
+        if (!connected || !wallet) return alert("Connect wallet first");
+        if (!ipfsHash) return alert("Upload file first");
+        if (!assetName.trim()) return alert("Enter asset name");
 
         try {
-            setMessage('Building transaction...');
+            setMinting(true);
 
             const utxos = await wallet.getUtxos();
             const changeAddress = await wallet.getChangeAddress();
+            const forgingScript = ForgeScript.withOneSignature(changeAddress);
+            const policyId = resolveScriptHash(forgingScript);
+            const tokenName = assetName.replace(/\s+/g, "");
+            const tokenNameHex = stringToHex(tokenName);
 
-            // datum: pack ticket info + image hash into the inline datum
-            const datumStr = JSON.stringify({
-                eventId,
-                seller: address ?? '',
-                price: priceAda,
-                ticketNumber,
-                eventDate: Date.now(),
-                status: 0,
-                imageHash: ipfsHash  // Include IPFS hash
-            });
+            const metadata = {
+                [policyId]: {
+                    [tokenName]: {
+                        name: assetName,
+                        image: ipfsHash,
+                        mediaType: "image/jpg",
+                        description: assetDescription,
+                    },
+                },
+            };
 
             const txBuilder = new MeshTxBuilder({ verbose: true });
-
-            const lovelace = Math.floor(priceAda * 1_000_000).toString();
-
             const unsignedTx = await txBuilder
-                .txOut(scriptAddress, [{ unit: 'lovelace', quantity: lovelace }])
-                .txOutInlineDatumValue(mConStr0([stringToHex(datumStr)]))
+                .mint(assetQuantity.toString(), policyId, tokenNameHex)
+                .mintingScript(forgingScript)
+                .metadataValue(721, metadata)
                 .changeAddress(changeAddress)
                 .selectUtxosFrom(utxos)
                 .complete();
 
-            setMessage('Waiting for wallet signature...');
-            const signed = await wallet.signTx(unsignedTx);
-            setMessage('Submitting transaction...');
-            const txHash = await wallet.submitTx(signed);
+            const signedTx = await wallet.signTx(unsignedTx);
+            const hash = await wallet.submitTx(signedTx);
 
-            setMessage('Created — tx: ' + txHash);
-        } catch (err) {
-            console.error(err);
-            setMessage('Error: ' + (err instanceof Error ? err.message : String(err)));
+            setTxHash(hash);
+            setMinting(false);
+            alert("Minted!");
+        } catch (e) {
+            console.log(e);
+            setMinting(false);
+            alert("Mint failed");
         }
     };
 
     return (
-        <div style={{ padding: 20 }}>
-            <h2>Create Ticket</h2>
-            {!connected && <div style={{ color: 'orange' }}>Connect a wallet to create a ticket</div>}
+        <div style={{
+            display: "flex",
+            flexDirection: "column",
+            gap: "20px",
+            padding: "24px",
+            border: "1px solid #ddd",
+            borderRadius: "8px",
+            width: "100%",
+            maxWidth: "400px"
+        }}>
 
-            <div style={{ marginBottom: 20, padding: 12, border: '1px solid #ddd', borderRadius: 8 }}>
-                <h3>Upload Ticket Image</h3>
+            <div>
+                <h3>Upload Image</h3>
                 <input
                     type="file"
                     accept="image/*"
                     onChange={(e) => setFile(e.target.files?.[0])}
-                    style={{ marginBottom: 8, display: 'block', width: '100%' }}
+                    style={{ width: "100%", padding: "8px", marginBottom: "8px" }}
                 />
-                {file && (
-                    <div style={{ marginBottom: 8 }}>
-                        <img
-                            src={URL.createObjectURL(file)}
-                            alt="preview"
-                            style={{ maxWidth: 150, borderRadius: 4 }}
-                        />
-                    </div>
-                )}
                 <button
-                    type="button"
                     disabled={uploading || !file}
                     onClick={uploadFile}
                     style={{
-                        padding: '8px 16px',
-                        backgroundColor: uploading || !file ? '#ccc' : '#007bff',
-                        color: 'white',
-                        border: 'none',
-                        borderRadius: '4px',
-                        cursor: uploading || !file ? 'not-allowed' : 'pointer',
-                        width: '100%'
+                        padding: "8px 16px",
+                        backgroundColor: uploading || !file ? "#ccc" : "#007bff",
+                        color: "white",
+                        border: "none",
+                        borderRadius: "4px",
+                        width: "100%",
+                        cursor: uploading || !file ? "not-allowed" : "pointer"
                     }}
                 >
-                    {uploading ? 'Uploading...' : 'Upload to Pinata'}
+                    {uploading ? "Uploading..." : "Upload"}
                 </button>
-                {ipfsHash && <p style={{ color: 'green', fontSize: 12, marginTop: 8 }}>✓ Image uploaded: {ipfsHash}</p>}
+                {ipfsHash && <p style={{ color: "green", fontSize: "12px" }}>Uploaded: {ipfsHash}</p>}
             </div>
 
-            <form onSubmit={handleCreate} style={{ display: 'grid', gap: 8, maxWidth: 500 }}>
-                <input name="eventId" placeholder="Event ID" />
-                <input name="ticketNumber" placeholder="Ticket Serial" />
-                <input name="price" placeholder="Price (ADA)" />
-                <button type="submit" disabled={!ipfsHash}>Create Ticket</button>
-            </form>
-            {scriptAddress && <div style={{ marginTop: 8, fontSize: 12, color: '#666' }}>Script: {scriptAddress}</div>}
-            {message && <p style={{ marginTop: 12, padding: 8, backgroundColor: '#f0f0f0', borderRadius: 4 }}>{message}</p>}
+            <div>
+                <h3>Asset Details</h3>
+                <input
+                    type="text"
+                    placeholder="Asset Name"
+                    value={assetName}
+                    onChange={(e) => setAssetName(e.target.value)}
+                    style={{ width: "100%", padding: "8px", marginBottom: "8px", boxSizing: "border-box" }}
+                />
+                <textarea
+                    placeholder="Description"
+                    value={assetDescription}
+                    onChange={(e) => setAssetDescription(e.target.value)}
+                    rows={2}
+                    style={{ width: "100%", padding: "8px", marginBottom: "8px", boxSizing: "border-box" }}
+                />
+                <input
+                    type="number"
+                    placeholder="Quantity"
+                    value={assetQuantity}
+                    onChange={(e) => setAssetQuantity(Math.max(1, parseInt(e.target.value) || 1))}
+                    min="1"
+                    style={{ width: "100%", padding: "8px", boxSizing: "border-box" }}
+                />
+            </div>
+
+            <div>
+                <button
+                    disabled={minting || !connected || !ipfsHash || !assetName.trim()}
+                    onClick={mintAssets}
+                    style={{
+                        padding: "12px",
+                        backgroundColor: (minting || !connected || !ipfsHash || !assetName.trim()) ? "#ccc" : "#28a745",
+                        color: "white",
+                        border: "none",
+                        borderRadius: "4px",
+                        width: "100%",
+                        fontSize: "16px",
+                        cursor: (minting || !connected || !ipfsHash || !assetName.trim()) ? "not-allowed" : "pointer"
+                    }}
+                >
+                    {minting ? "Minting..." : `Mint ${assetQuantity} Asset${assetQuantity > 1 ? 's' : ''}`}
+                </button>
+
+                {!connected && <p style={{ color: "red", fontSize: "12px", textAlign: "center" }}>Connect wallet first</p>}
+                {txHash && <p style={{ color: "green", fontSize: "12px", wordBreak: "break-all" }}>Success! TX: {txHash}</p>}
+            </div>
         </div>
     );
 }

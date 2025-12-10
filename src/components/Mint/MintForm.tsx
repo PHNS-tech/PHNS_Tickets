@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useWallet } from "@meshsdk/react";
 import {
     MeshTxBuilder,
@@ -18,8 +18,28 @@ export default function MintForm() {
     const [assetName, setAssetName] = useState("");
     const [assetDescription, setAssetDescription] = useState("");
     const [assetQuantity, setAssetQuantity] = useState(1);
+    const [connectedAddress, setConnectedAddress] = useState("");
+    const [mintError, setMintError] = useState("");
 
     const { wallet, connected } = useWallet();
+
+    // read connected wallet change address for UI/matching
+    useEffect(() => {
+        let mounted = true;
+        (async () => {
+            try {
+                if (wallet && connected) {
+                    const addr = await wallet.getChangeAddress();
+                    if (mounted) setConnectedAddress(addr || "");
+                } else {
+                    if (mounted) setConnectedAddress("");
+                }
+            } catch (e) {
+                if (mounted) setConnectedAddress("");
+            }
+        })();
+        return () => { mounted = false; };
+    }, [wallet, connected]);
 
     const uploadFile = async () => {
         if (!file) return alert("No file selected");
@@ -60,29 +80,54 @@ export default function MintForm() {
         try {
             setMinting(true);
 
-            const utxos = await wallet.getUtxos();
+            const hardCoded = process.env.NEXT_PUBLIC_HARD_CODED_ADDRESS || "";
             const changeAddress = await wallet.getChangeAddress();
+
+            // if hardcoded set, require that connected changeAddress matches it
+            if (hardCoded && hardCoded !== changeAddress) {
+                setMintError(`Connected wallet address does not match required address.`);
+                setMinting(false);
+                return;
+            }
+
+            const utxos = await wallet.getUtxos();
             const forgingScript = ForgeScript.withOneSignature(changeAddress);
             const policyId = resolveScriptHash(forgingScript);
-            const tokenName = assetName.replace(/\s+/g, "");
+            const tokenName = assetName.replace(/\s+/g, "") + Date.now();
             const tokenNameHex = stringToHex(tokenName);
 
+            // metadata in CIP-25 format (721) and use ipfs://CID
             const metadata = {
                 [policyId]: {
                     [tokenName]: {
                         name: assetName,
-                        image: ipfsHash,
-                        mediaType: "image/jpg",
-                        description: assetDescription,
+                        image: `ipfs://${ipfsHash}`,
+                        mediaType: "image/jpeg",
+                        description: assetDescription || "NFT",
                     },
                 },
             };
 
+            // recipient: use hard-coded env address if provided, otherwise send to changeAddress
+            const recipient = process.env.NEXT_PUBLIC_HARD_CODED_ADDRESS || changeAddress;
+
+            // unit is policyId + tokenNameHex
+            const assetUnit = `${policyId}${tokenNameHex}`;
+
+            // minimal ADA to attach so wallets show the NFT; adjust if necessary
+            const minLovelaceForOutput = "2000000";
+
             const txBuilder = new MeshTxBuilder({ verbose: true });
+
             const unsignedTx = await txBuilder
                 .mint(assetQuantity.toString(), policyId, tokenNameHex)
                 .mintingScript(forgingScript)
                 .metadataValue(721, metadata)
+                // send the minted token to recipient with required min ADA
+                .txOut(recipient, [
+                    { unit: 'lovelace', quantity: minLovelaceForOutput },
+                    { unit: assetUnit, quantity: assetQuantity.toString() },
+                ])
                 .changeAddress(changeAddress)
                 .selectUtxosFrom(utxos)
                 .complete();
@@ -92,11 +137,13 @@ export default function MintForm() {
 
             setTxHash(hash);
             setMinting(false);
+            setMintError("");
             alert("Minted!");
         } catch (e) {
             console.log(e);
             setMinting(false);
-            alert("Mint failed");
+            setMintError(String(e));
+            alert("Mint failed: " + (e instanceof Error ? e.message : String(e)));
         }
     };
 
@@ -138,6 +185,15 @@ export default function MintForm() {
                 {ipfsHash && <p style={{ color: "green", fontSize: "12px" }}>Uploaded: {ipfsHash}</p>}
             </div>
 
+            {/* Address status box */}
+            <div style={{ padding: '8px', marginTop: '6px', border: '1px solid #eee', borderRadius: '6px', background: '#fafafa' }}>
+                <div style={{ fontSize: '13px', marginBottom: '6px' }}><strong>Recipient (hardcoded):</strong> {process.env.NEXT_PUBLIC_HARD_CODED_ADDRESS || '(not set)'}</div>
+                <div style={{ fontSize: '13px', marginBottom: '6px' }}><strong>Connected wallet change address:</strong> {connectedAddress || '(not connected)'}</div>
+                <div style={{ fontSize: '13px', color: (process.env.NEXT_PUBLIC_HARD_CODED_ADDRESS && process.env.NEXT_PUBLIC_HARD_CODED_ADDRESS !== connectedAddress) ? 'red' : 'green' }}>
+                    {(process.env.NEXT_PUBLIC_HARD_CODED_ADDRESS && process.env.NEXT_PUBLIC_HARD_CODED_ADDRESS !== connectedAddress) ? 'Mismatch: connect correct wallet' : 'Match OK or not enforced'}
+                </div>
+            </div>
+
             <div>
                 <h3>Asset Details</h3>
                 <input
@@ -166,7 +222,7 @@ export default function MintForm() {
 
             <div>
                 <button
-                    disabled={minting || !connected || !ipfsHash || !assetName.trim()}
+                    disabled={minting || !connected || !ipfsHash || !assetName.trim() || (process.env.NEXT_PUBLIC_HARD_CODED_ADDRESS && process.env.NEXT_PUBLIC_HARD_CODED_ADDRESS !== connectedAddress)}
                     onClick={mintAssets}
                     style={{
                         padding: "12px",
@@ -183,6 +239,7 @@ export default function MintForm() {
                 </button>
 
                 {!connected && <p style={{ color: "red", fontSize: "12px", textAlign: "center" }}>Connect wallet first</p>}
+                {mintError && <p style={{ color: "red", fontSize: "12px", wordBreak: "break-all" }}>Error: {mintError}</p>}
                 {txHash && <p style={{ color: "green", fontSize: "12px", wordBreak: "break-all" }}>Success! TX: {txHash}</p>}
             </div>
         </div>
