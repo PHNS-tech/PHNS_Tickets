@@ -31,30 +31,51 @@ export default function CreateTicket() {
     if (!file) return alert("No file selected");
     try {
       setUploading(true);
-      // Get signed upload URL from backend
-      const urlRes = await fetch("/api/url").then((res) => res.json());
+      console.log('1. Requesting signed URL from /api/url');
+      const urlRes = await fetch("/api/url");
+      console.log('2. Response status:', urlRes.status, 'Content-Type:', urlRes.headers.get('content-type'));
+
+      if (!urlRes.ok) {
+        const text = await urlRes.text();
+        console.error('API response:', text.substring(0, 500));
+        throw new Error(`/api/url failed with status ${urlRes.status}: ${text.substring(0, 200)}`);
+      }
+
+      const urlJson = await urlRes.json();
+      console.log('3. Got signed URL:', urlJson.url?.substring(0, 50) + '...');
 
       // Upload file to Pinata via backend API route (avoids CORS)
       const formData = new FormData();
       formData.append("file", file);
-      formData.append("url", urlRes.url);
+      formData.append("url", urlJson.url);
 
+      console.log('4. Uploading file to /api/upload');
       const uploadRes = await fetch("/api/upload", {
         method: "POST",
         body: formData,
-      }).then((res) => res.json());
+      });
+      console.log('5. Upload response status:', uploadRes.status);
 
-      if (uploadRes.cid) {
-        setIpfsHash(uploadRes.cid);
+      if (!uploadRes.ok) {
+        const text = await uploadRes.text();
+        console.error('Upload error:', text.substring(0, 500));
+        throw new Error(`/api/upload failed: ${text.substring(0, 200)}`);
+      }
+
+      const uploadJson = await uploadRes.json();
+      console.log('6. Upload complete, CID:', uploadJson.cid);
+
+      if (uploadJson.cid) {
+        setIpfsHash(uploadJson.cid);
         setUploading(false);
         alert("File uploaded!");
       } else {
-        throw new Error(uploadRes.error || "Unknown error");
+        throw new Error(uploadJson.error || "No CID returned");
       }
     } catch (e) {
-      console.log(e);
+      console.error('Upload error:', e);
       setUploading(false);
-      alert("Upload failed");
+      alert("Upload failed: " + String(e));
     }
   };
 
