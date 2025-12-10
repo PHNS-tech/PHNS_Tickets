@@ -86,7 +86,7 @@ export async function POST(request: NextRequest) {
                 datum: datumValue
             });
         }
-        
+
         console.log(`[blockfrost] Returning ${result.length} UTXOs`);
 
 

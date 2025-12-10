@@ -252,7 +252,7 @@ export default function Marketplace() {
                 {utxos.map((u, i) => {
                     const isSelected = selectedUtxo?.input.txHash === u.input.txHash;
                     let price = '';
-                    try { 
+                    try {
                         if (u.datum && typeof u.datum === 'object') {
                             price = u.datum.price || u.datum.cbor;
                         }
