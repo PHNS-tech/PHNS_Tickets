@@ -49,8 +49,7 @@ export function Header() {
         <nav style={{ display: 'flex', gap: 18, alignItems: 'center' }}>
           <Link href="/CreateTicket" style={{ textDecoration: 'none', color: '#333' }}>Create Ticket</Link>
           <Link href="/Marketplace" style={{ textDecoration: 'none', color: '#333' }}>Marketplace</Link>
-          <Link href="/Burn" style={{ textDecoration: 'none', color: '#333' }}>Burn</Link>
-          <Link href="/SmartContract" style={{ textDecoration: 'none', color: '#333' }}>Smart Contract</Link>
+          <Link href="/MyTicket" style={{ textDecoration: 'none', color: '#333' }}>My Ticket</Link>
         </nav>
 
         <div style={{ marginLeft: 18 }}>
