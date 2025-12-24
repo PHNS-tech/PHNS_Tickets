@@ -54,6 +54,6 @@ export class MeshAdapter {
             code: applyParamsToScript(this.contractSpendCompileCode, []),
             version: "V3",
         };
-        return serializePlutusScript(script).address;
+        return serializePlutusScript(script, undefined, this.networkId).address;
     }
 }

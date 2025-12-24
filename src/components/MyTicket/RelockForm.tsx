@@ -24,7 +24,7 @@ export default function RelockForm() {
             const blockfrost = new BlockfrostProvider(process.env.NEXT_PUBLIC_BLOCKFROST_API_KEY!);
             const contract = new Contract({ wallet: wallet as any, blockfrostProvider: blockfrost });
 
-            const relockTxHash = await contract.relockAsset({ txHash: txHashInput, newDatum });
+            const relockTxHash = "Relock not available"; // await contract.relockAsset({ txHash: txHashInput, newDatum });
 
             setTxHash(relockTxHash);
             setRelocking(false);

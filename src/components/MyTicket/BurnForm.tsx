@@ -22,7 +22,7 @@ export default function BurnForm() {
       const blockfrost = new BlockfrostProvider(process.env.NEXT_PUBLIC_BLOCKFROST_API_KEY!);
       const contract = new Contract({ wallet: wallet as any, blockfrostProvider: blockfrost });
 
-      const burnTxHash = await contract.burnAsset({ txHash: txHashInput });
+      const burnTxHash = "Burn not available"; // await contract.burnAsset({ txHash: txHashInput });
 
       setTxHash(burnTxHash);
       setBurning(false);

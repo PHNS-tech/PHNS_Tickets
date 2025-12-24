@@ -16,9 +16,12 @@ export function Header() {
   };
 
   const handleConnectClick = () => {
+    console.log('Wallet list:', walletList);
     if (walletList && walletList.length > 0) {
+      console.log('Connecting to:', walletList[0].name);
       connect?.(walletList[0].name);
     } else {
+      console.log('No wallets found, trying fallback connect');
       // fallback: call connect without args if API supports it
       // (some mesh implementations accept no-arg to open picker)
       // @ts-ignore

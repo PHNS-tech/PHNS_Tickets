@@ -1,6 +1,6 @@
 name = "punnohoang/phns_tickets"
 version = "0.1.0"
-compiler = "v1.1.19"
+compiler = "v1.1.21"
 plutus = "v3"
 description = "PHNS Tickets Aiken contracts"
 

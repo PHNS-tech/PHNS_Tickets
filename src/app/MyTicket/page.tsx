@@ -80,41 +80,6 @@ export default function MyTicketPage() {
 
     useEffect(() => { loadMyTickets(); }, [scriptAddress, address]);
 
-    const handleBurn = async (utxo: any) => {
-        if (!connected || !wallet) return alert("Connect wallet first");
-        try {
-            setLoading(true);
-            const blockfrost = new BlockfrostProvider(process.env.NEXT_PUBLIC_BLOCKFROST_API_KEY!);
-            const contract = new Contract({ wallet: wallet as any, blockfrostProvider: blockfrost });
-            const txHash = await contract.burnAsset({ txHash: utxo.input.txHash });
-            setResult(`Burned: ${txHash}`);
-            loadMyTickets(); // reload
-        } catch (e) {
-            console.error(e);
-            setResult('Burn failed');
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const handleRelock = async (utxo: any) => {
-        if (!connected || !wallet) return alert("Connect wallet first");
-        try {
-            setLoading(true);
-            const blockfrost = new BlockfrostProvider(process.env.NEXT_PUBLIC_BLOCKFROST_API_KEY!);
-            const contract = new Contract({ wallet: wallet as any, blockfrostProvider: blockfrost });
-            const newDatum = JSON.stringify({ ...utxo.datumParsed, status: 0 });
-            const txHash = await contract.relockAsset({ txHash: utxo.input.txHash, newDatum });
-            setResult(`Relocked: ${txHash}`);
-            loadMyTickets(); // reload
-        } catch (e) {
-            console.error(e);
-            setResult('Relock failed');
-        } finally {
-            setLoading(false);
-        }
-    };
-
     return (
         <main style={{
             width: '100%',
@@ -169,8 +134,6 @@ export default function MyTicketPage() {
                                         </div>
 
                                         <div style={{ marginTop: 12, display: 'flex', gap: 8 }}>
-                                            <button onClick={() => handleBurn(u)} disabled={loading} style={{ flex: 1, padding: 10, background: loading ? '#ccc' : '#dc3545', color: 'white', border: 'none', borderRadius: 8, cursor: loading ? 'not-allowed' : 'pointer', fontSize: 13 }}>Burn</button>
-                                            <button onClick={() => handleRelock(u)} disabled={loading} style={{ flex: 1, padding: 10, background: loading ? '#ccc' : '#17a2b8', color: 'white', border: 'none', borderRadius: 8, cursor: loading ? 'not-allowed' : 'pointer', fontSize: 13 }}>Relock</button>
                                         </div>
                                     </div>
                                 </div>
