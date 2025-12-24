@@ -17,8 +17,21 @@ validator ticket_marketplace {
     out_ref: OutputReference,
     self: Transaction,
   ) {
-    expect 1 == 1
-    True
+    expect Some(datum) = datum
+    let action = redeemer.action
+    let buyer = redeemer.buyer
+    if action == 0 {
+      // Buy action: ticket must be available (status 0), buyer not seller
+      expect datum.status == 0
+      expect buyer != datum.seller
+      True
+    } else if action == 1 {
+      // Cancel action: only seller can cancel
+      expect buyer == datum.seller
+      True
+    } else {
+      fail
+    }
   }
 
   else(_) {

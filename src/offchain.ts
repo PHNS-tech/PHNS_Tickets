@@ -6,6 +6,8 @@ import {
     applyParamsToScript,
     serializePlutusScript,
     deserializeAddress,
+    deserializeDatum,
+    createAddress,
 } from "@meshsdk/core";
 import { MeshAdapter } from "./mesh";
 
@@ -80,6 +82,14 @@ export class Contract extends MeshAdapter {
 
         console.log("Selected UTxO:", JSON.stringify(selectedUtxo, null, 2));
 
+        // Deserialize datum to get seller and status
+        const datumCbor = selectedUtxo.output.plutusData;
+        if (!datumCbor) throw new Error("Datum not found in script UTxO");
+        const datumObj = deserializeDatum(datumCbor);
+        console.log("Deserialized datum:", datumObj);
+        const seller = datumObj.fields[0].bytes;
+        const status = datumObj.fields[1].int;
+
         // Refresh wallet UTxOs/collateral after script UTxO is visible
         const refreshed = await this.getWalletForTx();
         utxos = refreshed.utxos;
@@ -93,47 +103,92 @@ export class Contract extends MeshAdapter {
 
         const signerHash = deserializeAddress(walletAddress).pubKeyHash;
 
-        const txBuilder = new MeshTxBuilder({
-            fetcher: this.fetcher,
-            submitter: this.fetcher,
-            verbose: true,
-        });
-
         // Build redeemer: constructor 0 [action: int, buyer: bytes]
         // Parse redeemer as "action,buyerHex" or default to action=0, buyer=signerHash
-        let redeemerValue: any;
+        let action: number;
+        let buyer: string;
         if (redeemer.includes(',')) {
             const [actionStr, buyerHex] = redeemer.split(',');
-            const action = parseInt(actionStr, 10);
-            redeemerValue = mConStr0([action, buyerHex]);
+            action = parseInt(actionStr, 10);
+            buyer = buyerHex;
         } else {
             // Default: action=0 (buy?), buyer=wallet pubKeyHash
-            redeemerValue = mConStr0([0, signerHash]);
+            action = 0;
+            buyer = signerHash;
         }
+        const redeemerValue = mConStr0([action, buyer]);
 
         try {
-            const unsignedTx = await txBuilder
-                .spendingPlutusScriptV3()
-                .txIn(
-                    selectedUtxo.input.txHash,
-                    selectedUtxo.input.outputIndex,
-                    selectedUtxo.output.amount,
-                    scriptAddress
-                )
-                .txInScript(scriptCbor)
-                .txInRedeemerValue(redeemerValue)
-                .txInInlineDatumPresent()
-                .requiredSignerHash(signerHash)
-                .changeAddress(walletAddress)
-                .txInCollateral(
-                    collateral[0].input.txHash,
-                    collateral[0].input.outputIndex,
-                    collateral[0].output.amount,
-                    collateral[0].output.address
-                )
-                .selectUtxosFrom(utxos)
-                .setNetwork("preprod")
-                .complete();
+            const txBuilder = new MeshTxBuilder({
+                fetcher: this.fetcher,
+                submitter: this.fetcher,
+                verbose: true,
+            });
+
+            // Build tx based on action
+            if (action === 0) {
+                // Buy: create output to buyer with status=1, and payment to seller
+                const buyerAddress = walletAddress; // for test, use same wallet
+                const sellerAddress = walletAddress;
+                const newDatum = mConStr0([seller, 1]); // status = 1 (sold)
+                const quantity = selectedUtxo.output.amount.find(a => a.unit === "lovelace")?.quantity || "0";
+
+                await txBuilder
+                    .spendingPlutusScriptV3()
+                    .txIn(
+                        selectedUtxo.input.txHash,
+                        selectedUtxo.input.outputIndex,
+                        selectedUtxo.output.amount,
+                        scriptAddress
+                    )
+                    .txInScript(scriptCbor)
+                    .txInRedeemerValue(redeemerValue)
+                    .txInInlineDatumPresent()
+                    .txOut(buyerAddress, selectedUtxo.output.amount) // send ticket to buyer
+                    .txOutInlineDatumValue(newDatum) // with status=1
+                    .txOut(sellerAddress, [{ unit: "lovelace", quantity }]) // send payment to seller
+                    .requiredSignerHash(signerHash)
+                    .changeAddress(walletAddress)
+                    .txInCollateral(
+                        collateral[0].input.txHash,
+                        collateral[0].input.outputIndex,
+                        collateral[0].output.amount,
+                        collateral[0].output.address
+                    )
+                    .selectUtxosFrom(utxos)
+                    .setNetwork("preprod");
+            } else if (action === 1) {
+                // Cancel: just consume the UTxO, return to seller
+                const sellerAddress = walletAddress;
+
+                await txBuilder
+                    .spendingPlutusScriptV3()
+                    .txIn(
+                        selectedUtxo.input.txHash,
+                        selectedUtxo.input.outputIndex,
+                        selectedUtxo.output.amount,
+                        scriptAddress
+                    )
+                    .txInScript(scriptCbor)
+                    .txInRedeemerValue(redeemerValue)
+                    .txInInlineDatumPresent()
+                    .txOut(sellerAddress, selectedUtxo.output.amount) // return to seller
+                    .txOutInlineDatumValue(mConStr0([seller, status])) // keep same datum
+                    .requiredSignerHash(signerHash)
+                    .changeAddress(walletAddress)
+                    .txInCollateral(
+                        collateral[0].input.txHash,
+                        collateral[0].input.outputIndex,
+                        collateral[0].output.amount,
+                        collateral[0].output.address
+                    )
+                    .selectUtxosFrom(utxos)
+                    .setNetwork("preprod");
+            } else {
+                throw new Error("Invalid action");
+            }
+
+            const unsignedTx = await txBuilder.complete();
             const signedTx = await this.wallet.signTx(unsignedTx).catch((e) => { throw new Error(`Signing failed: ${String(e)}`); });
             const txHashResult = await this.wallet.submitTx(signedTx).catch((e) => { throw new Error(`Submit failed: ${String(e)}`); });
             return txHashResult;
