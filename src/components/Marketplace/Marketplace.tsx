@@ -2,13 +2,8 @@
 
 import { useEffect, useState } from 'react';
 import { useWallet } from '@meshsdk/react';
-import {
-    applyParamsToScript,
-    serializePlutusScript,
-    MeshTxBuilder,
-    mConStr0,
-    stringToHex,
-} from '@meshsdk/core';
+import { Contract } from '../../offchain';
+import { BlockfrostProvider, applyParamsToScript, serializePlutusScript } from '@meshsdk/core';
 import blueprint from '../../../aiken-marketplace/plutus.json';
 
 async function fetchUtxos(address: string) {
@@ -104,7 +99,60 @@ export default function Marketplace() {
 
     useEffect(() => { load(); }, [scriptAddress]);
 
+    const handleUnlock = async () => {
+        if (!selectedUtxo || !connected || !wallet) return;
+        try {
+            const blockfrost = new BlockfrostProvider(process.env.NEXT_PUBLIC_BLOCKFROST_API_KEY!);
+            const contract = new Contract({ wallet: wallet as any, blockfrostProvider: blockfrost });
+            const txHash = await contract.unlockAsset({ txHash: selectedUtxo.input.txHash, redeemer: "1" }); // action 1
+            setResult(`Unlocked: ${txHash}`);
+            setSelectedUtxo(null);
+            setSelectedAction(null);
+            load(); // reload listings
+        } catch (e) {
+            console.error(e);
+            setResult('Unlock failed');
+        } finally {
+            setLoading(false);
+        }
+    };
 
+    const handleRelock = async () => {
+        if (!selectedUtxo || !connected || !wallet) return;
+        try {
+            const blockfrost = new BlockfrostProvider(process.env.NEXT_PUBLIC_BLOCKFROST_API_KEY!);
+            const contract = new Contract({ wallet: wallet as any, blockfrostProvider: blockfrost });
+            const newDatum = JSON.stringify({ ...selectedUtxo.datumParsed, status: 0 }); // set status to 0
+            const txHash = await contract.relockAsset({ txHash: selectedUtxo.input.txHash, newDatum });
+            setResult(`Relocked: ${txHash}`);
+            setSelectedUtxo(null);
+            setSelectedAction(null);
+            load();
+        } catch (e) {
+            console.error(e);
+            setResult('Relock failed');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleBurn = async () => {
+        if (!selectedUtxo || !connected || !wallet) return;
+        try {
+            const blockfrost = new BlockfrostProvider(process.env.NEXT_PUBLIC_BLOCKFROST_API_KEY!);
+            const contract = new Contract({ wallet: wallet as any, blockfrostProvider: blockfrost });
+            const txHash = await contract.burnAsset({ txHash: selectedUtxo.input.txHash });
+            setResult(`Burned: ${txHash}`);
+            setSelectedUtxo(null);
+            setSelectedAction(null);
+            load();
+        } catch (e) {
+            console.error(e);
+            setResult('Burn failed');
+        } finally {
+            setLoading(false);
+        }
+    };
 
     return (
         <div style={{ padding: 20, maxWidth: 1100, margin: '0 auto' }}>
@@ -201,7 +249,7 @@ export default function Marketplace() {
                     <h4 style={{ marginTop: 0 }}>Confirm {selectedAction.charAt(0).toUpperCase() + selectedAction.slice(1)}</h4>
                     <p style={{ fontSize: 12 }}>Selected: {selectedUtxo.input.txHash.substring(0, 20)}...</p>
                     <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
-                        {/* <button onClick={selectedAction === 'unlock' ? handleUnlock : selectedAction === 'relock' ? handleReLock : handleBurn} disabled={loading} style={{ flex: 1, padding: 12, background: loading ? '#ccc' : '#007bff', color: 'white', border: 'none', borderRadius: 8, cursor: loading ? 'not-allowed' : 'pointer' }}>{loading ? 'Processing...' : 'Confirm'}</button> */}
+                        <button onClick={selectedAction === 'unlock' ? handleUnlock : selectedAction === 'relock' ? handleRelock : handleBurn} disabled={loading} style={{ flex: 1, padding: 12, background: loading ? '#ccc' : '#007bff', color: 'white', border: 'none', borderRadius: 8, cursor: loading ? 'not-allowed' : 'pointer' }}>{loading ? 'Processing...' : 'Confirm'}</button>
                         <button onClick={() => { setSelectedUtxo(null); setSelectedAction(null); }} style={{ flex: 1, padding: 12, background: '#ddd', color: '#333', border: 'none', borderRadius: 8, cursor: 'pointer' }}>Cancel</button>
                     </div>
                 </div>
