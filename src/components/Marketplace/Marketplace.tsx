@@ -67,18 +67,29 @@ export default function Marketplace() {
             const rawAmounts = u.amount || u.assets || [];
             const assets = Array.isArray(rawAmounts) ? rawAmounts.filter((a: any) => a.unit !== 'lovelace') : [];
 
-            // giải mã datum nếu có (Blockfrost cung cấp fields[0].bytes là hex của chuỗi JSON)
+            // giải mã datum nếu có (Blockfrost cung cấp inline_datum cbor hex or json_value)
             let datumParsed: any = null;
             try {
                 if (u.datum && typeof u.datum === 'object') {
-                    // trước đây chúng ta đôi khi nhận { cbor: hex } hoặc { fields: [{ bytes: '...'}] }
-                    if (u.datum.cbor) {
+                    // nhận dạng các dạng: { cbor: hex } hoặc { fields: [{ bytes: '...'}] } hoặc already-json
+                    if (u.datum.cbor && typeof u.datum.cbor === 'string') {
+                        // cố gắng trích chuỗi JSON bên trong CBOR: tìm cặp dấu ngoặc { ... }
                         const s = hexToString(u.datum.cbor);
-                        datumParsed = JSON.parse(s);
+                        const start = s.indexOf('{');
+                        const end = s.lastIndexOf('}');
+                        if (start >= 0 && end > start) {
+                            const jsonStr = s.slice(start, end + 1);
+                            try { datumParsed = JSON.parse(jsonStr); } catch (e) { datumParsed = { raw: jsonStr }; }
+                        } else {
+                            // fallback: keep raw cbor hex
+                            datumParsed = { cbor: u.datum.cbor };
+                        }
                     } else if (u.datum.fields && u.datum.fields[0] && u.datum.fields[0].bytes) {
                         const hex = u.datum.fields[0].bytes;
                         const s = hexToString(hex);
                         try { datumParsed = JSON.parse(s); } catch (e) { datumParsed = s; }
+                    } else if (u.datum.json_value) {
+                        datumParsed = u.datum.json_value;
                     } else {
                         datumParsed = u.datum;
                     }
