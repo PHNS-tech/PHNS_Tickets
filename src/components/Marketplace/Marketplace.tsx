@@ -47,6 +47,7 @@ export default function Marketplace() {
     const [result, setResult] = useState('');
     const [selectedAction, setSelectedAction] = useState<string | null>(null);
     const [selectedUtxo, setSelectedUtxo] = useState<any>(null);
+    const [buyQuantity, setBuyQuantity] = useState<number>(1);
 
     const Script = applyParamsToScript(blueprint.validators[0].compiledCode, []);
 
@@ -104,7 +105,11 @@ export default function Marketplace() {
         try {
             const blockfrost = new BlockfrostProvider(process.env.NEXT_PUBLIC_BLOCKFROST_API_KEY!);
             const contract = new Contract({ wallet: wallet as any, blockfrostProvider: blockfrost });
-            const txHash = await contract.unlockAsset({ txHash: selectedUtxo.input.txHash, redeemer: "1" }); // action 1
+            // determine asset unit and pass desired quantity
+            const asset = selectedUtxo.assets?.[0] || (selectedUtxo.amount || selectedUtxo.output?.amount || []).find((a: any) => a.unit !== 'lovelace');
+            const unit = asset?.unit;
+            const qty = buyQuantity || (asset ? parseInt(asset.quantity || '1', 10) : 1);
+            const txHash = await contract.unlockAsset({ txHash: selectedUtxo.input.txHash, redeemer: "1", unit, quantity: String(qty) }); // action 1
             setResult(`Unlocked: ${txHash}`);
             setSelectedUtxo(null);
             setSelectedAction(null);
@@ -210,6 +215,10 @@ export default function Marketplace() {
                 <div style={{ marginTop: 20, padding: 16, border: '1px solid #007bff', borderRadius: 8, background: '#f0f8ff' }}>
                     <h4 style={{ marginTop: 0 }}>Confirm {selectedAction.charAt(0).toUpperCase() + selectedAction.slice(1)}</h4>
                     <p style={{ fontSize: 12 }}>Selected: {selectedUtxo.input.txHash.substring(0, 20)}...</p>
+                    <div style={{ marginTop: 8 }}>
+                        <label style={{ fontSize: 13, display: 'block', marginBottom: 6 }}>Quantity to buy</label>
+                        <input type="number" min={1} max={selectedUtxo.assets?.[0]?.quantity || 1} value={buyQuantity} onChange={(e) => setBuyQuantity(Math.max(1, Math.floor(Number(e.target.value) || 1)))} style={{ padding: 8, width: 120, borderRadius: 6, border: '1px solid #ccc' }} />
+                    </div>
                     <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
                         <button onClick={handleUnlock} disabled={loading} style={{ flex: 1, padding: 12, background: loading ? '#ccc' : '#007bff', color: 'white', border: 'none', borderRadius: 8, cursor: loading ? 'not-allowed' : 'pointer' }}>{loading ? 'Processing...' : 'Confirm'}</button>
                         <button onClick={() => { setSelectedUtxo(null); setSelectedAction(null); }} style={{ flex: 1, padding: 12, background: '#ddd', color: '#333', border: 'none', borderRadius: 8, cursor: 'pointer' }}>Cancel</button>

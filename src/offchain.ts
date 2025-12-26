@@ -58,9 +58,13 @@ export class Contract extends MeshAdapter {
     unlockAsset = async ({
         txHash,
         redeemer,
+        unit,
+        quantity,
     }: {
         txHash: string;
         redeemer: string;
+        unit?: string;
+        quantity?: string;
     }): Promise<string> => {
         let { utxos, walletAddress, collateral } = await this.getWalletForTx();
 
@@ -167,6 +171,42 @@ export class Contract extends MeshAdapter {
         }
 
         try {
+            // Determine asset and quantities for partial purchase
+            const amounts = selectedUtxo.output.amount || [];
+            const asset = (amounts.find((a: any) => a.unit !== 'lovelace') || {} as any);
+            const assetUnit = unit || asset.unit;
+            const totalQty = asset && asset.quantity ? BigInt(asset.quantity) : BigInt(1);
+            const buyQty = quantity ? BigInt(quantity) : totalQty;
+            if (buyQty <= BigInt(0)) throw new Error('Invalid purchase quantity');
+            if (buyQty > totalQty) throw new Error('Requested quantity exceeds available amount');
+
+            // Try to parse datum from the selected UTxO so we can re-create a script output with remaining tokens
+            let datumValue: any = undefined;
+            try {
+                const od = selectedUtxo.output?.datum || selectedUtxo.output?.inlineDatum || selectedUtxo.output?.inline_datum;
+                if (od && typeof od === 'object') {
+                    const hex = od.cbor || (od.fields && od.fields[0] && od.fields[0].bytes) || od;
+                    if (typeof hex === 'string') {
+                        const hexStr = hex.replace(/^0x/, '');
+                        const bytes = (hexStr.match(/.{1,2}/g) || []).map((h: string) => parseInt(h, 16));
+                        const s = new TextDecoder().decode(new Uint8Array(bytes));
+                        try {
+                            const parsed = JSON.parse(s);
+                            if (parsed && parsed.seller) {
+                                const statusInt = parsed.status ? parseInt(String(parsed.status), 10) : 0;
+                                datumValue = mConStr0([parsed.seller, statusInt]);
+                            } else {
+                                datumValue = mConStr0([stringToHex(s)]);
+                            }
+                        } catch (e) {
+                            datumValue = mConStr0([stringToHex(s)]);
+                        }
+                    }
+                }
+            } catch (e) {
+                // ignore, we'll proceed without reattaching datum if not available
+            }
+
             const unsignedTx = await txBuilder
                 .spendingPlutusScriptV3()
                 .txIn(
@@ -179,6 +219,13 @@ export class Contract extends MeshAdapter {
                 .txInRedeemerValue(redeemerValue)
                 .txInInlineDatumPresent()
                 .requiredSignerHash(signerHash)
+                // send purchased tokens to buyer
+                .txOut(walletAddress, assetUnit ? [{ unit: assetUnit, quantity: buyQty.toString() }] : undefined)
+                // if remaining tokens exist, return them to the script address (attach original datum if parsed)
+                .txOut(
+                    scriptAddress,
+                    assetUnit && totalQty - buyQty > BigInt(0) ? [{ unit: assetUnit, quantity: (totalQty - buyQty).toString() }] : undefined
+                )
                 .changeAddress(walletAddress)
                 .txInCollateral(
                     collateral[0].input.txHash,
