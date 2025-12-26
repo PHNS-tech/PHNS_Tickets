@@ -120,8 +120,15 @@ export default function Marketplace() {
             const asset = selectedUtxo.assets?.[0] || (selectedUtxo.amount || selectedUtxo.output?.amount || []).find((a: any) => a.unit !== 'lovelace');
             const unit = asset?.unit;
             const qty = buyQuantity || (asset ? parseInt(asset.quantity || '1', 10) : 1);
+            // compute total using unit price stored in datum (treat datum.price as price per unit)
+            let pricePerUnit = 0;
+            try {
+                const p = selectedUtxo.datumParsed?.price ?? selectedUtxo.datumParsed;
+                pricePerUnit = Number(typeof p === 'string' ? (JSON.parse(p).price ?? p) : p) || 0;
+            } catch (e) { pricePerUnit = Number(selectedUtxo.datumParsed?.price) || 0; }
+            const total = pricePerUnit * qty;
             const txHash = await contract.unlockAsset({ txHash: selectedUtxo.input.txHash, redeemer: "1", unit, quantity: String(qty) }); // action 1
-            setResult(`Unlocked: ${txHash}`);
+            setResult(`Unlocked: ${txHash} — paid ${total} lovelace`);
             setSelectedUtxo(null);
             setSelectedAction(null);
             load(); // reload listings
@@ -153,7 +160,7 @@ export default function Marketplace() {
                     let price = '';
                     try {
                         if (u.datumParsed) {
-                            // ưu tiên giá số trong datum
+                            // ưu tiên giá số trong datum (treat as unit price)
                             price = u.datumParsed.price ?? u.datumParsed.cbor ?? '';
                             // nếu datumParsed là chuỗi thì thử JSON parse
                             if (!price && typeof u.datumParsed === 'string') {
@@ -161,6 +168,7 @@ export default function Marketplace() {
                             }
                         }
                     } catch (e) { }
+                    const pricePerUnit = Number(price) || 0;
                     const asset = u.assets?.[0];
                     // lấy tên token có thể đọc từ asset.unit (policyid + hex(tokenName))
                     let tokenName = '';
@@ -209,7 +217,7 @@ export default function Marketplace() {
                                 <div style={{ marginTop: 8, fontSize: 13, color: '#444' }}>
                                     <div style={{ marginBottom: 6 }}><strong>TX:</strong> {u.input.txHash.substring(0, 16)}...</div>
                                     <div style={{ marginBottom: 6 }}><strong>Token:</strong> {tokenName || (asset ? asset.unit : '—')}</div>
-                                    <div style={{ marginBottom: 6 }}><strong>Price:</strong> {price ? `${price} lovelace` : '—'}</div>
+                                    <div style={{ marginBottom: 6 }}><strong>Price:</strong> {pricePerUnit ? `${pricePerUnit} lovelace / unit` : '—'}</div>
                                 </div>
 
                                 <div style={{ marginTop: 12, display: 'flex', gap: 8 }}>

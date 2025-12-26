@@ -142,6 +142,7 @@ export default function CreateTicket() {
       const { address: scriptAddress } = serializePlutusScript({ code: Script, version: 'V3' });
 
       const datumObj = { event_id: 'evt1', seller: changeAddress, price: Number(lockPrice), ticket_number: 't1', event_date: 0, status: 0 };
+      console.log('Locking with datum:', datumObj);
       const datumStr = JSON.stringify(datumObj);
 
       const txBuilder = new MeshTxBuilder({ verbose: true });
@@ -202,7 +203,7 @@ export default function CreateTicket() {
               </div>
 
               <div style={{ flex: '1 1 160px' }}>
-                <label style={{ display: 'block', fontWeight: 600, marginBottom: 6 }}>Price (lovelace)</label>
+                <label style={{ display: 'block', fontWeight: 600, marginBottom: 6 }}>Price per unit (lovelace)</label>
                 <input value={lockPrice} onChange={(e) => setLockPrice(e.target.value)} style={{ width: '100%', padding: 10, borderRadius: 8, border: '1px solid #ddd', boxSizing: 'border-box' }} />
               </div>
             </div>

@@ -69,7 +69,7 @@ export class Contract extends MeshAdapter {
         let { utxos, walletAddress, collateral } = await this.getWalletForTx();
 
         // Try multiple times to fetch the script UTxO (in case of propagation delay)
-        const maxRetries = 5;
+        const maxRetries = 1;
         const retryDelayMs = 2000;
         let selectedUtxo: any | null = null;
         for (let i = 0; i < maxRetries; i++) {
