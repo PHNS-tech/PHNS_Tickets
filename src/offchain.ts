@@ -41,14 +41,12 @@ export class Contract extends MeshAdapter {
         const statusInt = status ? parseInt(status, 10) : 0;
         const totalQty = parseInt(quantity, 10);
 
-        // Create datum: [seller, price, policy_id, asset_name, status, total_quantity]
+        console.log("[lockAsset] Creating datum with seller:", sellerAddr, "status:", statusInt);
+
+        // Create datum: [seller, status] - matches smart contract Datum type
         const datumValue = mConStr0([
             sellerAddr,
-            priceInt,
-            policyId,
-            assetName,
             statusInt,
-            totalQty,
         ]);
 
         const unsignedTx = await txBuilder
@@ -211,13 +209,12 @@ export class Contract extends MeshAdapter {
                 datumValue = undefined;
             }
 
-            // Build redeemer: [action=0(buy), buyer, quantity, new_price(None)]
+            // Build redeemer: [action, buyer]
             const redeemerValue = mConStr0([
                 0, // action: buy
                 signerHash, // buyer
-                buyQty.toString(), // quantity
-                mConStr1([]), // new_price: Option None
             ]);
+            console.log("[buyTickets] Redeemer:", redeemerValue);
 
             // Build transaction in single operation:
             // 1. Spend script UTxO with redeemer
@@ -334,19 +331,22 @@ export class Contract extends MeshAdapter {
 
         const signerHash = deserializeAddress(walletAddress).pubKeyHash;
 
+        console.log("[cancelListing] Signer hash:", signerHash);
+        console.log("[cancelListing] Script address:", scriptAddress);
+        console.log("[cancelListing] Selected UTxO input:", selectedUtxo.input);
+
         const txBuilder = new MeshTxBuilder({
             fetcher: this.fetcher,
             submitter: this.fetcher as any,
             verbose: true,
         });
 
-        // Redeemer: [action=1(cancel), buyer, quantity, new_price]
+        // Redeemer: [action, buyer]
         const redeemerValue = mConStr0([
             1, // action: cancel
-            signerHash,
-            0, // quantity (unused for cancel)
-            mConStr1([]), // new_price: None
+            signerHash, // buyer (seller in this case)
         ]);
+        console.log("[cancelListing] Redeemer:", redeemerValue);
 
         try {
             const amounts = selectedUtxo.output.amount || [];
@@ -368,6 +368,9 @@ export class Contract extends MeshAdapter {
             if (!utxos || utxos.length === 0) {
                 throw new Error("No UTxOs available for transaction");
             }
+
+            console.log("[cancelListing] Building transaction with redeemer:", redeemerValue);
+            console.log("[cancelListing] Collateral:", collateral[0].input);
 
             const unsignedTx = await txBuilder
                 .spendingPlutusScriptV3()
@@ -399,11 +402,18 @@ export class Contract extends MeshAdapter {
                 .setNetwork("preprod")
                 .complete();
 
+            console.log("[cancelListing] Transaction built successfully");
+
             const signedTx = await this.wallet.signTx(unsignedTx);
+            console.log("[cancelListing] Transaction signed successfully");
+            
             const txHashResult = await this.wallet.submitTx(signedTx);
+            console.log("[cancelListing] Transaction submitted:", txHashResult);
             return txHashResult;
         } catch (err: any) {
-            console.error("Cancel listing error details:", err);
+            console.error("[cancelListing] Full error object:", err);
+            console.error("[cancelListing] Error message:", err?.message);
+            console.error("[cancelListing] Error string:", String(err));
             throw new Error(`Failed to build/sign/submit cancel tx: ${err?.message || String(err)}`);
         }
     };
@@ -479,13 +489,12 @@ export class Contract extends MeshAdapter {
             verbose: true,
         });
 
-        // Redeemer: [action=2(update_price), buyer, quantity, new_price]
+        // Redeemer: [action, buyer]
         const redeemerValue = mConStr0([
             2, // action: update_price
-            signerHash,
-            0, // quantity (unused)
-            mConStr0([newPrice]), // new_price: Some(newPrice)
+            signerHash, // buyer (seller in this case)
         ]);
+        console.log("[updatePrice] Redeemer:", redeemerValue);
 
         try {
             const amounts = selectedUtxo.output.amount || [];
